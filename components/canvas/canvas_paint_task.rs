@@ -10,6 +10,7 @@ use geom::matrix2d::Matrix2D;
 use geom::point::Point2D;
 use geom::rect::Rect;
 use geom::size::Size2D;
+use util::geometry;
 use gfx::color;
 use util::task::spawn_named;
 use util::vec::byte_swap;
@@ -27,6 +28,7 @@ pub enum CanvasMsg {
     BeginPath,
     ClosePath,
     Fill,
+    DrawImage(Sender<CanvasMsg>, Size2D<i32>, Rect<i32>, Rect<i32>, bool),
     MoveTo(Point2D<f32>),
     LineTo(Point2D<f32>),
     QuadraticCurveTo(Point2D<f32>, Point2D<f32>),
@@ -80,6 +82,11 @@ impl<'a> CanvasPaintTask<'a> {
                     CanvasMsg::BeginPath => painter.begin_path(),
                     CanvasMsg::ClosePath => painter.close_path(),
                     CanvasMsg::Fill => painter.fill(),
+                    CanvasMsg::DrawImage(source_image, image_size, dest_rect,
+                                         source_rect, smoothing_enabled) => {
+                            painter.draw_image(source_image, image_size, dest_rect,
+                                               source_rect, smoothing_enabled)
+                    }
                     CanvasMsg::MoveTo(ref point) => painter.move_to(point),
                     CanvasMsg::LineTo(ref point) => painter.line_to(point),
                     CanvasMsg::QuadraticCurveTo(ref cp, ref pt) => {
@@ -145,6 +152,41 @@ impl<'a> CanvasPaintTask<'a> {
                 // TODO(pcwalton)
             }
         };
+    }
+
+    fn draw_image(&self, image: Sender<CanvasMsg>, image_size: Size2D<i32>, dest_rect: Rect<i32>, source_rect: Rect<i32>, smoothing_enabled: bool) {
+        let (sender, receiver) = channel::<Vec<u8>>();
+        // It retrieves image data from source image
+        image.send(CanvasMsg::GetImageData(source_rect, image_size, sender)).unwrap();
+        let mut imagedata = receiver.recv().unwrap();
+
+        if imagedata.len() <= 0 {
+            return
+        }
+
+        // rgba -> bgra
+        byte_swap(imagedata.as_mut_slice());
+
+        let source_surface = self.drawtarget.create_source_surface_from_data(imagedata.as_slice(),
+            source_rect.size, source_rect.size.width * 4, SurfaceFormat::B8G8R8A8);
+
+        // From spec https://html.spec.whatwg.org/multipage/scripting.html#dom-context-2d-drawimage
+        // When scaling up, if the imageSmoothingEnabled attribute is set to true, the user agent should attempt
+        // to apply a smoothing algorithm to the image data when it is scaled.
+        // Otherwise, the image must be rendered using nearest-neighbor interpolation.
+        let filter = if smoothing_enabled {
+            Filter::Linear
+        } else {
+            Filter::Point
+        };
+
+        let draw_surface_options = DrawSurfaceOptions::new(filter, true);
+        let draw_options = DrawOptions::new(1.0f64 as AzFloat, 0);
+        let source_rect = Rect(Point2D(0i32, 0i32), source_rect.size);
+
+        self.drawtarget.draw_surface(source_surface,
+                                     geometry::i32_rect_to_azfloat(dest_rect),
+                                     geometry::i32_rect_to_azfloat(source_rect), draw_surface_options, draw_options);
     }
 
     fn move_to(&self, point: &Point2D<AzFloat>) {

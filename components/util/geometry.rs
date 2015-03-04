@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use azure::azure::AzFloat;
+
 use geom::length::Length;
 use geom::point::Point2D;
 use geom::rect::Rect;
@@ -352,5 +354,11 @@ pub fn rect_contains_point<T:PartialOrd + Add<T, Output=T>>(rect: Rect<T>, point
 pub fn f32_rect_to_au_rect(rect: Rect<f32>) -> Rect<Au> {
     Rect(Point2D(Au::from_frac32_px(rect.origin.x), Au::from_frac32_px(rect.origin.y)),
          Size2D(Au::from_frac32_px(rect.size.width), Au::from_frac32_px(rect.size.height)))
+}
+
+/// A helper function to convert a rect of `f32` pixels to a rect of AzFloat units.
+pub fn i32_rect_to_azfloat(rect: Rect<i32>) -> Rect<AzFloat> {
+    Rect(Point2D(rect.origin.x as AzFloat, rect.origin.y as AzFloat),
+                Size2D(rect.size.width as AzFloat, rect.size.height as AzFloat))
 }
 

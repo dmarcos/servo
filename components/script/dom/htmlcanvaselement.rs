@@ -85,11 +85,28 @@ impl LayoutHTMLCanvasElementHelpers for LayoutJS<HTMLCanvasElement> {
 
 pub trait HTMLCanvasElementHelpers {
     fn get_size(&self) -> Size2D<i32>;
+    fn get_context(self) -> Option<Temporary<CanvasRenderingContext2D>>;
+    fn is_valid(self) -> bool;
 }
 
 impl<'a> HTMLCanvasElementHelpers for JSRef<'a, HTMLCanvasElement> {
     fn get_size(&self) -> Size2D<i32> {
         Size2D(self.Width() as i32, self.Height() as i32)
+    }
+
+    fn get_context(self) -> Option<Temporary<CanvasRenderingContext2D>> {
+        Some(self.context.or_init(|| {
+            let window = window_from_node(self).root();
+            let (w, h) = (self.width.get() as i32, self.height.get() as i32);
+            CanvasRenderingContext2D::new(GlobalRef::Window(window.r()), self, Size2D(w, h))
+        }))
+    }
+
+    fn is_valid(self) -> bool {
+       if self.height.get() == 0 || self.width.get() == 0 {
+           return false;
+       }
+       return true;
     }
 }
 
