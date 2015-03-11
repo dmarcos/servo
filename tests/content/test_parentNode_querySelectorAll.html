@@ -52,6 +52,16 @@
                 nodelist = docfrag.querySelectorAll("#foo:nth-child(1)");
                 is(nodelist.item(0), div);
             }
+            { // docfrag.querySelectorAll
+                let docfrag = document.createDocumentFragment();
+                let div = document.createElement("div");
+                div.id = "foo";
+                div.className = "myClass";
+                div.innerHTML = '<canvas></canvas>' +
+                                '<canvas></canvas>';
+                docfrag.appendChild(div);
+                is(docfrag.querySelectorAll("canvas").length, 2);
+            }
         </script>
     </body>
 </html>
