@@ -198,9 +198,6 @@ impl CanvasRenderingContext2D {
                   sx: f64, sy: f64, sw: Option<f64>, sh: Option<f64>,
                   dx: Option<f64>, dy: Option<f64>, dw: Option<f64>, dh: Option<f64>) -> Fallible<()> {
 
-        let context = canvas.get_context().unwrap().root();
-        let renderer = context.r().get_renderer();
-
         // https://html.spec.whatwg.org/multipage/scripting.html#dom-context-2d-drawimage
         // 1. Check the usability of the image argument
         if !canvas.is_valid() {
@@ -215,17 +212,27 @@ impl CanvasRenderingContext2D {
                 return Err(IndexSize)
         }
 
-        let canvas_size = canvas.get_size();
-
         // When scaling up, if the imageSmoothingEnabled attribute is set to true,
         // the user agent should attempt to apply a smoothing algorithm to the
         // image data when it is scaled. Otherwise, the image must be rendered using
         // nearest-neighbor interpolation
         let smoothing_enabled = self.image_smoothing_enabled.get();
+        let canvas_size = canvas.get_size();
 
-        self.renderer.send(CanvasMsg::DrawImage(
-                            renderer, canvas_size, dest_rect,
-                            source_rect, smoothing_enabled)).unwrap();
+        // If the source and target canvas are the same
+        let msg = if self.canvas == canvas.unrooted() {
+            CanvasMsg::DrawImageSelf(
+                canvas_size, dest_rect,
+                source_rect, smoothing_enabled)
+        } else { // Source and target canvases are different
+            let context = canvas.get_context().unwrap().root();
+            let renderer = context.r().get_renderer();
+            CanvasMsg::DrawImage(
+                renderer, canvas_size, dest_rect,
+                source_rect, smoothing_enabled)
+        };
+
+        self.renderer.send(msg).unwrap();
         Ok(())
     }
 }
@@ -499,8 +506,7 @@ impl<'a> CanvasRenderingContext2DMethods for JSRef<'a, CanvasRenderingContext2D>
         let data = imagedata.get_data_array(&self.global.root().r());
         let image_data_rect = Rect(Point2D(dx.to_i32().unwrap(), dy.to_i32().unwrap()), imagedata.get_size());
         let dirty_rect = None;
-        let canvas_size = self.canvas.root().r().get_size();
-        self.renderer.send(CanvasMsg::PutImageData(data, image_data_rect, dirty_rect, canvas_size)).unwrap()
+        self.renderer.send(CanvasMsg::PutImageData(data, image_data_rect, dirty_rect)).unwrap()
     }
 
     fn PutImageData_(self, imagedata: JSRef<ImageData>, dx: f64, dy: f64,
@@ -512,8 +518,7 @@ impl<'a> CanvasRenderingContext2DMethods for JSRef<'a, CanvasRenderingContext2D>
         let dirty_rect = Some(Rect(Point2D(dirtyX.to_i32().unwrap(), dirtyY.to_i32().unwrap()),
                                    Size2D(dirtyWidth.to_i32().unwrap(),
                                           dirtyHeight.to_i32().unwrap())));
-        let canvas_size = self.canvas.root().r().get_size();
-        self.renderer.send(CanvasMsg::PutImageData(data, image_data_rect, dirty_rect, canvas_size)).unwrap()
+        self.renderer.send(CanvasMsg::PutImageData(data, image_data_rect, dirty_rect)).unwrap()
     }
 
     fn CreateLinearGradient(self, x0: f64, y0: f64, x1: f64, y1: f64) -> Fallible<Temporary<CanvasGradient>> {
