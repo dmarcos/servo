@@ -10,7 +10,6 @@ use geom::matrix2d::Matrix2D;
 use geom::point::Point2D;
 use geom::rect::Rect;
 use geom::size::Size2D;
-use util::geometry;
 use gfx::color;
 use util::task::spawn_named;
 use util::vec::byte_swap;
@@ -115,8 +114,9 @@ impl<'a> CanvasPaintTaskPrivateHelpers for CanvasPaintTask<'a> {
         let draw_options = DrawOptions::new(1.0f64 as AzFloat, 0);
 
         self.drawtarget.draw_surface(source_surface,
-                                    geometry::i32_rect_to_azfloat(dest_rect),
-                                    geometry::i32_rect_to_azfloat(source_rect), draw_surface_options, draw_options);
+                                    dest_rect.to_azfloat(),
+                                    source_rect.to_azfloat(),
+                                    draw_surface_options, draw_options);
     }
 
 
@@ -230,14 +230,14 @@ impl<'a> CanvasPaintTask<'a> {
                     CanvasMsg::ClosePath => painter.close_path(),
                     CanvasMsg::Fill => painter.fill(),
                     CanvasMsg::DrawImage(source_image, image_size, dest_rect,
-                                         source_rect, smoothing_enabled) => {
-                            painter.draw_image(source_image, image_size, dest_rect,
-                                               source_rect, smoothing_enabled)
+                        source_rect, smoothing_enabled) => {
+                        painter.draw_image(source_image, image_size, dest_rect,
+                            source_rect, smoothing_enabled)
                     }
                     CanvasMsg::DrawImageSelf(image_size, dest_rect,
-                                         source_rect, smoothing_enabled) => {
-                            painter.draw_image_self(image_size, dest_rect,
-                                               source_rect, smoothing_enabled)
+                        source_rect, smoothing_enabled) => {
+                        painter.draw_image_self(image_size, dest_rect,
+                            source_rect, smoothing_enabled)
                     }
                     CanvasMsg::MoveTo(ref point) => painter.move_to(point),
                     CanvasMsg::LineTo(ref point) => painter.line_to(point),
@@ -558,5 +558,16 @@ impl FillOrStrokeStyle {
                     &Matrix2D::identity()))
             }
         }
+    }
+}
+
+pub trait ToAzFloat {
+    fn to_azfloat(&self) -> Rect<AzFloat>;
+}
+
+impl ToAzFloat for Rect<i32> {
+    fn to_azfloat(&self) -> Rect<AzFloat> {
+        Rect(Point2D(self.origin.x as AzFloat, self.origin.y as AzFloat),
+                    Size2D(self.size.width as AzFloat, self.size.height as AzFloat))
     }
 }
