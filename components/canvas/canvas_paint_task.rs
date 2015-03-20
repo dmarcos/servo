@@ -26,7 +26,7 @@ pub enum CanvasMsg {
     BeginPath,
     ClosePath,
     Fill,
-    DrawImage(Sender<CanvasMsg>, Size2D<i32>, Rect<i32>, Rect<i32>, bool),
+    DrawImage(Vec<u8>, Size2D<i32>, Rect<i32>, Rect<i32>, bool),
     DrawImageSelf(Size2D<i32>, Rect<i32>, Rect<i32>, bool),
     MoveTo(Point2D<f32>),
     LineTo(Point2D<f32>),
@@ -229,9 +229,9 @@ impl<'a> CanvasPaintTask<'a> {
                     CanvasMsg::BeginPath => painter.begin_path(),
                     CanvasMsg::ClosePath => painter.close_path(),
                     CanvasMsg::Fill => painter.fill(),
-                    CanvasMsg::DrawImage(source_image, image_size, dest_rect,
+                    CanvasMsg::DrawImage(imagedata, image_size, dest_rect,
                         source_rect, smoothing_enabled) => {
-                        painter.draw_image(source_image, image_size, dest_rect,
+                        painter.draw_image(imagedata, image_size, dest_rect,
                             source_rect, smoothing_enabled)
                     }
                     CanvasMsg::DrawImageSelf(image_size, dest_rect,
@@ -306,13 +306,13 @@ impl<'a> CanvasPaintTask<'a> {
         };
     }
 
-    fn draw_image(&self, image: Sender<CanvasMsg>,
+    fn draw_image(&self, imagedata: Vec<u8>,
                   image_size: Size2D<i32>, dest_rect: Rect<i32>,
                   source_rect: Rect<i32>, smoothing_enabled: bool) {
-        let (sender, receiver) = channel::<Vec<u8>>();
-        // Reads pixels from source image
-        image.send(CanvasMsg::GetImageData(source_rect, image_size, sender)).unwrap();
-        let imagedata = receiver.recv().unwrap();
+        // let (sender, receiver) = channel::<Vec<u8>>();
+        // // Reads pixels from source image
+        // image.send(CanvasMsg::GetImageData(source_rect, image_size, sender)).unwrap();
+        // let imagedata = receiver.recv().unwrap();
         // Writes on target canvas
         self.write_image(imagedata, source_rect, dest_rect, smoothing_enabled);
     }
@@ -325,7 +325,6 @@ impl<'a> CanvasPaintTask<'a> {
         let imagedata = self.read_pixels(source_rect, image_size);
         // Writes on target canvas
         self.write_image(imagedata, source_rect, dest_rect, smoothing_enabled);
-
     }
 
     fn move_to(&self, point: &Point2D<AzFloat>) {
