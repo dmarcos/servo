@@ -138,6 +138,14 @@ impl<'a> WebGLRenderingContextMethods for JSRef<'a, WebGLRenderingContext> {
         self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DrawArrays(mode, first, count))).unwrap()
     }
 
+    fn DrawElements(self, mode: u32, count: i32, data_type: u32, offset: i64) {
+        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::DrawElements(mode, count, data_type, offset))).unwrap()
+    }
+
+    fn Enable(self, capability: u32) {
+        self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::Enable(capability))).unwrap()
+    }
+
     fn EnableVertexAttribArray(self, attrib_id: u32) -> () {
         self.renderer.send(CanvasMsg::WebGL(CanvasWebGLMsg::EnableVertexAttribArray(attrib_id))).unwrap()
     }

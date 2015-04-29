@@ -82,6 +82,8 @@ impl WebGLPaintTask {
                             CanvasWebGLMsg::ClearColor(r, g, b, a) => painter.clear_color(r, g, b, a),
                             CanvasWebGLMsg::CreateBuffer(chan) => painter.create_buffer(chan),
                             CanvasWebGLMsg::DrawArrays(mode, first, count) => painter.draw_arrays(mode, first, count),
+                            CanvasWebGLMsg::DrawElements(mode, count, data_type, offset) => painter.draw_elements(mode, count, data_type, offset),
+                            CanvasWebGLMsg::Enable(capability) => painter.enable(capability),
                             CanvasWebGLMsg::EnableVertexAttribArray(attrib_id) => painter.enable_vertex_attrib_array(attrib_id),
                             CanvasWebGLMsg::GetAttribLocation(program_id, name, chan) => painter.get_attrib_location(program_id, name, chan),
                             CanvasWebGLMsg::GetShaderInfoLog(shader_id, chan) => painter.get_shader_info_log(shader_id, chan),
@@ -156,6 +158,14 @@ impl WebGLPaintTask {
 
     fn draw_arrays(&self, mode: u32, first: i32, count: i32) {
         gl::draw_arrays(mode, first, count);
+    }
+
+    fn draw_elements(&self, mode: u32, count: i32, data_type: u32, offset: i64) {
+        //gl::draw_elements(mode, count, data_type, offset);
+    }
+
+    fn enable(&self, capability: u32) {
+        gl::enable(capability);
     }
 
     fn enable_vertex_attrib_array(&self, attrib_id: u32) {

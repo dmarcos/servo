@@ -62,6 +62,8 @@ pub enum CanvasWebGLMsg {
     CreateProgram(Sender<u32>),
     CreateShader(u32, Sender<u32>),
     DrawArrays(u32, i32, i32),
+    DrawElements(u32, i32, u32, i64),
+    Enable(u32),
     EnableVertexAttribArray(u32),
     GetAttribLocation(u32, String, Sender<i32>),
     GetShaderInfoLog(u32, Sender<String>),
