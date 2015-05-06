@@ -26,6 +26,7 @@ use text::TextRun;
 use azure::azure::AzFloat;
 use azure::azure_hl::{Color};
 
+use canvas::canvas_msg::CanvasMsg;
 use collections::linked_list::{self, LinkedList};
 use geom::{Point2D, Rect, SideOffsets2D, Size2D, Matrix2D};
 use geom::approxeq::ApproxEq;
@@ -43,7 +44,8 @@ use util::range::Range;
 use util::smallvec::{SmallVec, SmallVec8};
 use std::fmt;
 use std::slice::Iter;
-use std::sync::Arc;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use style::computed_values::{border_style, cursor, filter, image_rendering, mix_blend_mode};
 use style::computed_values::{pointer_events};
 use style::properties::ComputedValues;
@@ -171,27 +173,14 @@ impl DisplayList {
         let doit = |items: &Vec<DisplayItem>| {
             for item in items.iter() {
                 match *item {
-                    DisplayItem::SolidColorClass(ref solid_color) => {
-                        println!("{:?} SolidColor. {:?}", indentation, solid_color.base.bounds)
-                    }
-                    DisplayItem::TextClass(ref text) => {
-                        println!("{:?} Text. {:?}", indentation, text.base.bounds)
-                    }
-                    DisplayItem::ImageClass(ref image) => {
-                        println!("{:?} Image. {:?}", indentation, image.base.bounds)
-                    }
-                    DisplayItem::BorderClass(ref border) => {
-                        println!("{:?} Border. {:?}", indentation, border.base.bounds)
-                    }
-                    DisplayItem::GradientClass(ref gradient) => {
-                        println!("{:?} Gradient. {:?}", indentation, gradient.base.bounds)
-                    }
-                    DisplayItem::LineClass(ref line) => {
-                        println!("{:?} Line. {:?}", indentation, line.base.bounds)
-                    }
-                    DisplayItem::BoxShadowClass(ref box_shadow) => {
-                        println!("{:?} Box_shadow. {:?}", indentation, box_shadow.base.bounds)
-                    }
+                    DisplayItem::SolidColorClass(ref solid_color) => println!("{} SolidColor. {:?}", indentation, solid_color.base.bounds),
+                    DisplayItem::TextClass(ref text) => println!("{:?} Text. {:?}", indentation, text.base.bounds),
+                    DisplayItem::ImageClass(ref image) => println!("{:?} Image. {:?}", indentation, image.base.bounds),
+                    DisplayItem::CanvasClass(ref canvas) => println!("{:?} Image. {:?}", indentation, canvas.base.bounds),
+                    DisplayItem::BorderClass(ref border) => println!("{:?} Border. {:?}", indentation, border.base.bounds),
+                    DisplayItem::GradientClass(ref gradient) => println!("{:?} Gradient. {:?}", indentation, gradient.base.bounds),
+                    DisplayItem::LineClass(ref line) => println!("{:?} Line. {:?}", indentation, line.base.bounds),
+                    DisplayItem::BoxShadowClass(ref box_shadow) => println!("{:?} Box_shadow. {:?}", indentation, box_shadow.base.bounds),
                 }
             }
             println!("\n");
@@ -277,7 +266,8 @@ impl StackingContext {
                                           paint_context: &mut PaintContext,
                                           tile_bounds: &Rect<AzFloat>,
                                           transform: &Matrix2D<AzFloat>,
-                                          clip_rect: Option<&Rect<Au>>) {
+                                          clip_rect: Option<&Rect<Au>>) -> Option<Arc<Mutex<Sender<CanvasMsg>>>> {
+        let mut renderer = None;
         let transform = transform.mul(&self.transform);
         let temporary_draw_target =
             paint_context.get_or_create_temporary_draw_target(&self.filters, self.blend_mode);
@@ -315,7 +305,7 @@ impl StackingContext {
 
             // Steps 1 and 2: Borders and background for the root.
             for display_item in display_list.background_and_borders.iter() {
-                display_item.draw_into_context(&mut paint_subcontext)
+                display_item.draw_into_context(&mut paint_subcontext);
             }
 
             // Step 3: Positioned descendants with negative z-indices.
@@ -339,25 +329,25 @@ impl StackingContext {
                     positioned_kid.optimize_and_draw_into_context(&mut paint_subcontext,
                                                                   &new_tile_rect,
                                                                   &new_transform,
-                                                                  Some(&positioned_kid.overflow))
+                                                                  Some(&positioned_kid.overflow));
                 }
             }
 
             // Step 4: Block backgrounds and borders.
             for display_item in display_list.block_backgrounds_and_borders.iter() {
-                display_item.draw_into_context(&mut paint_subcontext)
+                display_item.draw_into_context(&mut paint_subcontext);
             }
 
             // Step 5: Floats.
             for display_item in display_list.floats.iter() {
-                display_item.draw_into_context(&mut paint_subcontext)
+                display_item.draw_into_context(&mut paint_subcontext);
             }
 
             // TODO(pcwalton): Step 6: Inlines that generate stacking contexts.
 
             // Step 7: Content.
             for display_item in display_list.content.iter() {
-                display_item.draw_into_context(&mut paint_subcontext)
+                renderer = display_item.draw_into_context(&mut paint_subcontext);
             }
 
             // Steps 8 and 9: Positioned descendants with nonnegative z-indices.
@@ -382,24 +372,25 @@ impl StackingContext {
                     positioned_kid.optimize_and_draw_into_context(&mut paint_subcontext,
                                                                   &new_tile_rect,
                                                                   &new_transform,
-                                                                  Some(&positioned_kid.overflow))
+                                                                  Some(&positioned_kid.overflow));
                 }
             }
 
             // Step 10: Outlines.
             for display_item in display_list.outlines.iter() {
-                display_item.draw_into_context(&mut paint_subcontext)
+                display_item.draw_into_context(&mut paint_subcontext);
             }
 
             // Undo our clipping and transform.
             paint_subcontext.remove_transient_clip_if_applicable();
             paint_subcontext.pop_clip_if_applicable();
-            paint_subcontext.draw_target.set_transform(&old_transform)
+            paint_subcontext.draw_target.set_transform(&old_transform);
         }
 
         paint_context.draw_temporary_draw_target_if_necessary(&temporary_draw_target,
                                                               &self.filters,
-                                                              self.blend_mode)
+                                                              self.blend_mode);
+        renderer
     }
 
     /// Translate the given tile rect into the coordinate system of a child stacking context.
@@ -579,6 +570,7 @@ pub enum DisplayItem {
     SolidColorClass(Box<SolidColorDisplayItem>),
     TextClass(Box<TextDisplayItem>),
     ImageClass(Box<ImageDisplayItem>),
+    CanvasClass(Box<CanvasDisplayItem>),
     BorderClass(Box<BorderDisplayItem>),
     GradientClass(Box<GradientDisplayItem>),
     LineClass(Box<LineDisplayItem>),
@@ -869,6 +861,31 @@ impl HeapSizeOf for ImageDisplayItem {
     }
 }
 
+/// Paints an image.
+#[derive(Clone)]
+pub struct CanvasDisplayItem {
+    pub base: BaseDisplayItem,
+    pub image: Arc<Image>,
+
+    /// The dimensions to which the image display item should be stretched. If this is smaller than
+    /// the bounds of this display item, then the image will be repeated in the appropriate
+    /// direction to tile the entire bounds.
+    pub stretch_size: Size2D<Au>,
+
+    /// The algorithm we should use to stretch the image. See `image_rendering` in CSS-IMAGES-3 §
+    /// 5.3.
+    pub image_rendering: image_rendering::T,
+
+    pub renderer: Option<Arc<Mutex<Sender<CanvasMsg>>>>,
+}
+
+impl HeapSizeOf for CanvasDisplayItem {
+    fn heap_size_of_children(&self) -> usize {
+        self.base.heap_size_of_children()
+        // We exclude `image` here because it is non-owning.
+    }
+}
+
 /// Paints a gradient.
 #[derive(Clone)]
 pub struct GradientDisplayItem {
@@ -1038,7 +1055,8 @@ impl<'a> Iterator for DisplayItemIterator<'a> {
 
 impl DisplayItem {
     /// Paints this display item into the given painting context.
-    fn draw_into_context(&self, paint_context: &mut PaintContext) {
+    fn draw_into_context(&self,
+                         paint_context: &mut PaintContext) -> Option<Arc<Mutex<Sender<CanvasMsg>>>> {
         {
             let this_clip = &self.base().clip;
             match paint_context.transient_clip {
@@ -1047,6 +1065,7 @@ impl DisplayItem {
             }
         }
 
+        let mut renderer = None;
         match *self {
             DisplayItem::SolidColorClass(ref solid_color) => {
                 if !solid_color.color.a.approx_eq(&0.0) {
@@ -1084,12 +1103,38 @@ impl DisplayItem {
                 }
             }
 
+            DisplayItem::CanvasClass(ref canvas_item) => {
+                // FIXME(pcwalton): This is a really inefficient way to draw a tiled image; use a
+                // brush instead.
+                debug!("Drawing image at {:?}.", canvas_item.base.bounds);
+
+                let mut y_offset = Au(0);
+                while y_offset < canvas_item.base.bounds.size.height {
+                    let mut x_offset = Au(0);
+                    while x_offset < canvas_item.base.bounds.size.width {
+                        let mut bounds = canvas_item.base.bounds;
+                        bounds.origin.x = bounds.origin.x + x_offset;
+                        bounds.origin.y = bounds.origin.y + y_offset;
+                        bounds.size = canvas_item.stretch_size;
+
+                        paint_context.draw_image(&bounds,
+                                                 canvas_item.image.clone(),
+                                                 canvas_item.image_rendering.clone());
+
+                        x_offset = x_offset + canvas_item.stretch_size.width;
+                    }
+
+                    y_offset = y_offset + canvas_item.stretch_size.height;
+                }
+                renderer = canvas_item.renderer.clone();
+            }
+
             DisplayItem::BorderClass(ref border) => {
                 paint_context.draw_border(&border.base.bounds,
                                           &border.border_widths,
                                           &border.radius,
                                           &border.color,
-                                          &border.style)
+                                          &border.style);
             }
 
             DisplayItem::GradientClass(ref gradient) => {
@@ -1100,7 +1145,7 @@ impl DisplayItem {
             }
 
             DisplayItem::LineClass(ref line) => {
-                paint_context.draw_line(&line.base.bounds, line.color, line.style)
+                paint_context.draw_line(&line.base.bounds, line.color, line.style);
             }
 
             DisplayItem::BoxShadowClass(ref box_shadow) => {
@@ -1109,9 +1154,10 @@ impl DisplayItem {
                                               box_shadow.color,
                                               box_shadow.blur_radius,
                                               box_shadow.spread_radius,
-                                              box_shadow.clip_mode)
+                                              box_shadow.clip_mode);
             }
         }
+        renderer
     }
 
     pub fn base<'a>(&'a self) -> &'a BaseDisplayItem {
@@ -1119,6 +1165,7 @@ impl DisplayItem {
             DisplayItem::SolidColorClass(ref solid_color) => &solid_color.base,
             DisplayItem::TextClass(ref text) => &text.base,
             DisplayItem::ImageClass(ref image_item) => &image_item.base,
+            DisplayItem::CanvasClass(ref canvas_item) => &canvas_item.base,
             DisplayItem::BorderClass(ref border) => &border.base,
             DisplayItem::GradientClass(ref gradient) => &gradient.base,
             DisplayItem::LineClass(ref line) => &line.base,
@@ -1131,6 +1178,7 @@ impl DisplayItem {
             DisplayItem::SolidColorClass(ref mut solid_color) => &mut solid_color.base,
             DisplayItem::TextClass(ref mut text) => &mut text.base,
             DisplayItem::ImageClass(ref mut image_item) => &mut image_item.base,
+            DisplayItem::CanvasClass(ref mut canvas_item) => &mut canvas_item.base,
             DisplayItem::BorderClass(ref mut border) => &mut border.base,
             DisplayItem::GradientClass(ref mut gradient) => &mut gradient.base,
             DisplayItem::LineClass(ref mut line) => &mut line.base,
@@ -1158,6 +1206,7 @@ impl fmt::Debug for DisplayItem {
                 DisplayItem::SolidColorClass(_) => "SolidColor",
                 DisplayItem::TextClass(_) => "Text",
                 DisplayItem::ImageClass(_) => "Image",
+                DisplayItem::CanvasClass(_) => "Canvas",
                 DisplayItem::BorderClass(_) => "Border",
                 DisplayItem::GradientClass(_) => "Gradient",
                 DisplayItem::LineClass(_) => "Line",
@@ -1175,6 +1224,7 @@ impl HeapSizeOf for DisplayItem {
             SolidColorClass(ref item) => item.heap_size_of_children(),
             TextClass(ref item)       => item.heap_size_of_children(),
             ImageClass(ref item)      => item.heap_size_of_children(),
+            CanvasClass(ref item)     => item.heap_size_of_children(),
             BorderClass(ref item)     => item.heap_size_of_children(),
             GradientClass(ref item)   => item.heap_size_of_children(),
             LineClass(ref item)       => item.heap_size_of_children(),

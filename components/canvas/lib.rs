@@ -10,11 +10,11 @@
 extern crate azure;
 extern crate cssparser;
 extern crate geom;
-extern crate gfx;
 extern crate util;
 extern crate gleam;
 extern crate offscreen_gl_context;
 extern crate glutin;
+extern crate layers;
 
 #[macro_use]
 extern crate log;

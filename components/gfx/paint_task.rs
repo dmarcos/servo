@@ -12,6 +12,7 @@ use paint_context::PaintContext;
 
 use azure::azure_hl::{SurfaceFormat, Color, DrawTarget, BackendType};
 use azure::AzFloat;
+use canvas::canvas_msg::{CanvasMsg, CanvasCommonMsg};
 use geom::matrix2d::Matrix2D;
 use geom::point::Point2D;
 use geom::rect::Rect;
@@ -29,7 +30,7 @@ use profile_traits::time::{self, profile};
 use skia::SkiaGrGLNativeContextRef;
 use std::borrow::ToOwned;
 use std::mem;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use util::geometry::{Au, ZERO_POINT};
 use util::opts;
@@ -304,7 +305,7 @@ impl<C> PaintTask<C> where C: PaintListener + Send + 'static {
                 buffer.rect = tile.page_rect;
                 buffer.screen_pos = tile.screen_rect;
                 buffer.resolution = scale;
-                buffer.native_surface.mark_wont_leak();
+                buffer.native_surface.lock().unwrap().mark_wont_leak();
                 buffer.painted_with_cpu = true;
                 buffer.content_age = tile.content_age;
                 return Some(buffer)
@@ -321,7 +322,7 @@ impl<C> PaintTask<C> where C: PaintListener + Send + 'static {
         native_surface.mark_wont_leak();
 
         Some(box LayerBuffer {
-            native_surface: native_surface,
+            native_surface: Arc::new(Mutex::new(native_surface)),
             rect: tile.page_rect,
             screen_pos: tile.screen_rect,
             resolution: scale,
@@ -499,11 +500,18 @@ impl WorkerThread {
             match self.receiver.recv().unwrap() {
                 MsgToWorkerThread::Exit => break,
                 MsgToWorkerThread::PaintTile(thread_id, tile, layer_buffer, stacking_context, scale) => {
-                    let draw_target = self.optimize_and_paint_tile(thread_id, &tile, stacking_context, scale);
+                    let (draw_target, renderer) = self.optimize_and_paint_tile(thread_id, &tile, stacking_context, scale);
                     let buffer = self.create_layer_buffer_for_painted_tile(&tile,
                                                                            layer_buffer,
                                                                            draw_target,
                                                                            scale);
+                    match renderer {
+                        Some(ref renderer) => {
+                            renderer.lock().unwrap().send(CanvasMsg::Common(CanvasCommonMsg::SetDrawTarget(buffer.native_surface.clone()))).unwrap()
+                        },
+                        None => {
+                        },
+                    };
                     self.sender.send(MsgFromWorkerThread::PaintedTile(buffer)).unwrap()
                 }
             }
@@ -515,7 +523,8 @@ impl WorkerThread {
                                tile: &BufferRequest,
                                stacking_context: Arc<StackingContext>,
                                scale: f32)
-                               -> DrawTarget {
+                               -> (DrawTarget, Option<Arc<Mutex<Sender<CanvasMsg>>>>) {
+        let mut renderer = None;
         let size = Size2D(tile.screen_rect.size.width as i32, tile.screen_rect.size.height as i32);
         let draw_target = if !opts::get().gpu_painting {
             DrawTarget::new(BackendType::Skia, size, SurfaceFormat::B8G8R8A8)
@@ -564,7 +573,7 @@ impl WorkerThread {
                           None,
                           self.time_profiler_sender.clone(),
                           || {
-                stacking_context.optimize_and_draw_into_context(&mut paint_context,
+                renderer = stacking_context.optimize_and_draw_into_context(&mut paint_context,
                                                                 &tile_bounds,
                                                                 &matrix,
                                                                 None);
@@ -582,7 +591,7 @@ impl WorkerThread {
             }
         }
 
-        draw_target
+        (draw_target, renderer)
     }
 
     fn create_layer_buffer_for_painted_tile(&mut self,
@@ -597,11 +606,11 @@ impl WorkerThread {
         // FIXME(pcwalton): We should supply the texture and native surface *to* the draw target in
         // GPU painting mode, so that it doesn't have to recreate it.
         if !opts::get().gpu_painting {
-            let mut buffer = layer_buffer.unwrap();
+            let buffer = layer_buffer.unwrap();
             draw_target.snapshot().get_data_surface().with_data(|data| {
-                buffer.native_surface.upload(native_graphics_context!(self), data);
+                buffer.native_surface.lock().unwrap().upload(native_graphics_context!(self), data);
                 debug!("painting worker thread uploading to native surface {}",
-                       buffer.native_surface.get_id());
+                       buffer.native_surface.lock().unwrap().get_id());
             });
             return buffer
         }
@@ -616,7 +625,7 @@ impl WorkerThread {
         native_surface.mark_wont_leak();
 
         box LayerBuffer {
-            native_surface: native_surface,
+            native_surface: Arc::new(Mutex::new(native_surface)),
             rect: tile.page_rect,
             screen_pos: tile.screen_rect,
             resolution: scale,

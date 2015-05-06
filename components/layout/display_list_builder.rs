@@ -28,7 +28,7 @@ use gfx::display_list::{BLUR_INFLATION_FACTOR, BaseDisplayItem, BorderDisplayIte
 use gfx::display_list::{BorderRadii, BoxShadowClipMode, BoxShadowDisplayItem, ClippingRegion};
 use gfx::display_list::{DisplayItem, DisplayList, DisplayItemMetadata};
 use gfx::display_list::{GradientDisplayItem};
-use gfx::display_list::{GradientStop, ImageDisplayItem, LineDisplayItem};
+use gfx::display_list::{GradientStop, ImageDisplayItem, CanvasDisplayItem, LineDisplayItem};
 use gfx::display_list::{OpaqueNode, SolidColorDisplayItem};
 use gfx::display_list::{StackingContext, TextDisplayItem, TextOrientation};
 use gfx::paint_task::{PaintLayer, THREAD_TINT_COLORS};
@@ -1040,7 +1040,7 @@ impl FragmentDisplayListBuilding for Fragment {
                     None => repeat(0xFFu8).take(width * height * 4).collect(),
                 };
 
-                let canvas_display_item = box ImageDisplayItem {
+                let canvas_display_item = box CanvasDisplayItem {
                     base: BaseDisplayItem::new(stacking_relative_content_box,
                                                DisplayItemMetadata::new(self.node,
                                                                             &*self.style,
@@ -1053,9 +1053,10 @@ impl FragmentDisplayListBuilding for Fragment {
                     }),
                     stretch_size: stacking_relative_content_box.size,
                     image_rendering: image_rendering::T::Auto,
+                    renderer: canvas_fragment_info.renderer.clone(),
                 };
 
-                display_list.content.push_back(DisplayItem::ImageClass(canvas_display_item));
+                display_list.content.push_back(DisplayItem::CanvasClass(canvas_display_item));
             }
             SpecificFragmentInfo::UnscannedText(_) => {
                 panic!("Shouldn't see unscanned fragments here.")

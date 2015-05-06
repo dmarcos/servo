@@ -104,6 +104,7 @@ impl WebGLPaintTask {
                         match message {
                             CanvasCommonMsg::Close => break,
                             CanvasCommonMsg::SendPixelContents(chan) => painter.send_pixel_contents(chan),
+                            CanvasCommonMsg::SetDrawTarget(target) => {},
                             CanvasCommonMsg::Recreate(size) => painter.recreate(size),
                         }
                     },

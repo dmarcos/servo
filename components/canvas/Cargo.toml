@@ -19,11 +19,11 @@ git = "https://github.com/servo/rust-geom"
 [dependencies.gleam]
 git = "https://github.com/servo/gleam"
 
+[dependencies.layers]
+git = "https://github.com/servo/rust-layers"
+
 [dependencies.util]
 path = "../util"
-
-[dependencies.gfx]
-path = "../gfx"
 
 [dependencies.glutin]
 git = "https://github.com/servo/glutin"

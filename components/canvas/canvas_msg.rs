@@ -2,21 +2,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use layers::platform::surface::NativeSurface;
 use canvas_paint_task::{FillOrStrokeStyle, LineCapStyle, LineJoinStyle, CompositionOrBlending};
 use geom::matrix2d::Matrix2D;
 use geom::point::Point2D;
 use geom::rect::Rect;
 use geom::size::Size2D;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender};
 
-#[derive(Clone)]
 pub enum CanvasMsg {
     Canvas2d(Canvas2dMsg),
     Common(CanvasCommonMsg),
     WebGL(CanvasWebGLMsg),
 }
 
-#[derive(Clone)]
 pub enum Canvas2dMsg {
     Arc(Point2D<f32>, f32, f32, f32, bool),
     ArcTo(Point2D<f32>, Point2D<f32>, f32),
@@ -50,7 +50,6 @@ pub enum Canvas2dMsg {
     SetTransform(Matrix2D<f32>),
 }
 
-#[derive(Clone)]
 pub enum CanvasWebGLMsg {
     AttachShader(u32, u32),
     BindBuffer(u32, u32),
@@ -75,9 +74,9 @@ pub enum CanvasWebGLMsg {
     Viewport(i32, i32, i32, i32),
 }
 
-#[derive(Clone)]
 pub enum CanvasCommonMsg {
     Close,
     Recreate(Size2D<i32>),
     SendPixelContents(Sender<Vec<u8>>),
+    SetDrawTarget(Arc<Mutex<NativeSurface>>),
 }

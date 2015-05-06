@@ -275,7 +275,10 @@ impl CanvasFragmentInfo {
             replaced_image_fragment_info: ReplacedImageFragmentInfo::new(node,
                 Some(Au::from_px(node.get_canvas_width() as isize)),
                 Some(Au::from_px(node.get_canvas_height() as isize))),
-            renderer: node.get_renderer().map(|rec| Arc::new(Mutex::new(rec))),
+            renderer: match node.get_renderer() {
+                Some(renderer) => Some(Arc::new(Mutex::new(renderer))),
+                None => None,
+            },
         }
     }
 

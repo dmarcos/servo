@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use azure::azure::AzFloat;
+use azure::azure::AzColor;
 use azure::azure_hl::{DrawTarget, SurfaceFormat, BackendType, StrokeOptions, DrawOptions, Pattern};
 use azure::azure_hl::{ColorPattern, PathBuilder, DrawSurfaceOptions, Filter};
 use azure::azure_hl::{GradientStop, LinearGradientPattern, RadialGradientPattern, ExtendMode};
@@ -12,7 +13,6 @@ use geom::matrix2d::Matrix2D;
 use geom::point::Point2D;
 use geom::rect::Rect;
 use geom::size::Size2D;
-use gfx::color;
 use util::task::spawn_named;
 use util::vec::byte_swap;
 
@@ -177,8 +177,8 @@ impl<'a> CanvasPaintState<'a> {
     fn new() -> CanvasPaintState<'a> {
         CanvasPaintState {
             draw_options: DrawOptions::new(1.0, 0),
-            fill_style: Pattern::Color(ColorPattern::new(color::black())),
-            stroke_style: Pattern::Color(ColorPattern::new(color::black())),
+            fill_style: Pattern::Color(ColorPattern::new(AzColor { r: 0.0, g: 0.0, b: 0.0, a: 1.0 })),
+            stroke_style: Pattern::Color(ColorPattern::new(AzColor { r: 0.0, g: 0.0, b: 0.0, a: 1.0 })),
             stroke_opts: StrokeOptions::new(1.0, JoinStyle::MiterOrBevel, CapStyle::Butt, 10.0, &[]),
             transform: Matrix2D::identity(),
         }
@@ -255,6 +255,7 @@ impl<'a> CanvasPaintTask<'a> {
                         match message {
                             CanvasCommonMsg::Close => break,
                             CanvasCommonMsg::Recreate(size) => painter.recreate(size),
+                            CanvasCommonMsg::SetDrawTarget(target) => panic!("CACA"),
                             CanvasCommonMsg::SendPixelContents(chan) =>
                                 painter.send_pixel_contents(chan),
                         }
@@ -631,16 +632,19 @@ impl FillOrStrokeStyle {
     fn to_azure_pattern(&self, drawtarget: &DrawTarget) -> Pattern {
         match *self {
             FillOrStrokeStyle::Color(ref color) => {
-                Pattern::Color(ColorPattern::new(color::new(color.red,
-                                                            color.green,
-                                                            color.blue,
-                                                            color.alpha)))
+                Pattern::Color(ColorPattern::new(AzColor { r: color.red,
+                                                           g: color.green,
+                                                           b: color.blue,
+                                                           a: color.alpha }))
             },
             FillOrStrokeStyle::LinearGradient(ref linear_gradient_style) => {
                 let gradient_stops: Vec<GradientStop> = linear_gradient_style.stops.iter().map(|s| {
                     GradientStop {
                         offset: s.offset as AzFloat,
-                        color: color::new(s.color.red, s.color.green, s.color.blue, s.color.alpha)
+                        color: AzColor { r: s.color.red,
+                                         g: s.color.green,
+                                         b: s.color.blue,
+                                         a: s.color.alpha }
                     }
                 }).collect();
 
@@ -654,7 +658,10 @@ impl FillOrStrokeStyle {
                 let gradient_stops: Vec<GradientStop> = radial_gradient_style.stops.iter().map(|s| {
                     GradientStop {
                         offset: s.offset as AzFloat,
-                        color: color::new(s.color.red, s.color.green, s.color.blue, s.color.alpha)
+                        color: AzColor { r: s.color.red,
+                                         g: s.color.green,
+                                         b: s.color.blue,
+                                         a: s.color.alpha }
                     }
                 }).collect();
 
