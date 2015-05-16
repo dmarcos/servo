@@ -124,6 +124,7 @@ pub struct LayoutTaskData {
     /// A channel on which new animations that have been triggered by style recalculation can be
     /// sent.
     pub new_animations_sender: Sender<Animation>,
+
 }
 
 /// Information needed by the layout task.
@@ -490,6 +491,7 @@ impl LayoutTask {
                 self.handle_load_stylesheet(url, mq, pending, link_element, possibly_locked_rw_data)
             }
             Msg::SetQuirksMode => self.handle_set_quirks_mode(possibly_locked_rw_data),
+            Msg::GetLayerBuffer(layer_id) => {},
             Msg::GetRPC(response_chan) => {
                 response_chan.send(box LayoutRPCImpl(self.rw_data.clone()) as
                                    Box<LayoutRPC + Send>).unwrap();
@@ -900,7 +902,7 @@ impl LayoutTask {
                                                                          &self.url,
                                                                          data.reflow_info.goal);
 
-        if node.is_dirty() || node.has_dirty_descendants() || rw_data.stylist.is_dirty() {
+          if node.is_dirty() || node.has_dirty_descendants() || rw_data.stylist.is_dirty() {
             // Recalculate CSS styles and rebuild flows and fragments.
             profile(time::ProfilerCategory::LayoutStyleRecalc,
                     self.profiler_metadata(),

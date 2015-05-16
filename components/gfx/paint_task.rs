@@ -5,6 +5,8 @@
 //! The task that handles all painting.
 
 use buffer_map::BufferMap;
+use canvas::canvas_msg::{CanvasCommonMsg, CanvasMsg};
+
 use display_list::{self, StackingContext};
 use font_cache_task::FontCacheTask;
 use font_context::FontContext;
@@ -355,11 +357,18 @@ impl<C> PaintTask<C> where C: PaintListener + Send + 'static {
             for (i, tile) in tiles.into_iter().enumerate() {
                 let thread_id = i % self.worker_threads.len();
                 let layer_buffer = self.find_or_create_layer_buffer_for_tile(&tile, scale);
-                self.worker_threads[thread_id].paint_tile(thread_id,
-                                                          tile,
-                                                          layer_buffer,
-                                                          stacking_context.clone(),
-                                                          scale);
+                // match stacking_context.display_list.renderer {
+                //     Some(ref r) => {
+                //         r.lock().unwrap().send(CanvasMsg::Common(CanvasCommonMsg::SetLayerBuffer(layer_buffer))).unwrap();
+                //     },
+                //    None => {
+                        self.worker_threads[thread_id].paint_tile(thread_id,
+                                                                  tile,
+                                                                  layer_buffer,
+                                                                  stacking_context.clone(),
+                                                                  scale);
+                //     },
+                // }
             }
             let new_buffers = (0..tile_count).map(|i| {
                 let thread_id = i % self.worker_threads.len();
@@ -401,6 +410,7 @@ impl<C> PaintTask<C> where C: PaintListener + Send + 'static {
                     position: layer_position,
                     background_color: paint_layer.background_color,
                     scroll_policy: paint_layer.scroll_policy,
+                    renderer: stacking_context.display_list.renderer.is_some(),
                 })
             }
 
@@ -498,11 +508,22 @@ impl WorkerThread {
             match self.receiver.recv().unwrap() {
                 MsgToWorkerThread::Exit => break,
                 MsgToWorkerThread::PaintTile(thread_id, tile, layer_buffer, stacking_context, scale) => {
-                    let draw_target = self.optimize_and_paint_tile(thread_id, &tile, stacking_context, scale);
-                    let buffer = self.create_layer_buffer_for_painted_tile(&tile,
-                                                                           layer_buffer,
-                                                                           draw_target,
-                                                                           scale);
+                    let buffer;
+                    // let renderer = stacking_context.display_list.renderer.clone();
+                    // match renderer {
+                    //     Some(ref r) => {
+                    //         let (sender, receiver) = channel::<Option<Box<LayerBuffer>>>();
+                    //         r.lock().unwrap().send(CanvasMsg::Common(CanvasCommonMsg::GetLayerBuffer(sender))).unwrap();
+                    //         buffer = receiver.recv().unwrap().unwrap()
+                    //     },
+                    //     None => {
+                          let draw_target = self.optimize_and_paint_tile(thread_id, &tile, stacking_context, scale);
+                          buffer = self.create_layer_buffer_for_painted_tile(&tile,
+                                                                                 layer_buffer,
+                                                                                 draw_target,
+                                                                                 scale);
+                    //     },
+                    // }
                     self.sender.send(MsgFromWorkerThread::PaintedTile(buffer)).unwrap()
                 }
             }

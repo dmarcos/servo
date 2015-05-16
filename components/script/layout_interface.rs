@@ -11,6 +11,7 @@ use dom::node::LayoutData;
 use geom::point::Point2D;
 use geom::rect::Rect;
 use libc::uintptr_t;
+use msg::compositor_msg::LayerId;
 use msg::constellation_msg::{PipelineExitType, WindowSizeData};
 use net_traits::PendingAsyncLoad;
 use profile_traits::mem::{Reporter, ReportsChan};
@@ -59,6 +60,9 @@ pub enum Msg {
     /// accepted except `ExitMsg`. A response message will be sent on the supplied channel when
     /// this happens.
     PrepareToExit(Sender<()>),
+
+    // Requests the layer buffer for a given layer id.
+    GetLayerBuffer(LayerId),
 
     /// Requests that the layout task immediately shut down. There must be no more nodes left after
     /// this, or layout will crash.

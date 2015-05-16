@@ -71,7 +71,7 @@ pub enum ScrollPolicy {
 
 /// All layer-specific information that the painting task sends to the compositor other than the
 /// buffer contents of the layer itself.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct LayerMetadata {
     /// An opaque ID. This is usually the address of the flow and index of the box within it.
     pub id: LayerId,
@@ -81,6 +81,8 @@ pub struct LayerMetadata {
     pub background_color: Color,
     /// The scrolling policy of this layer.
     pub scroll_policy: ScrollPolicy,
+    /// Renderer that handles the painting of this layer
+    pub renderer: bool,
 }
 
 /// The interface used by the painter to acquire draw targets for each paint frame and

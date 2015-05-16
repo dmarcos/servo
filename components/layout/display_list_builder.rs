@@ -28,7 +28,7 @@ use gfx::display_list::{BLUR_INFLATION_FACTOR, BaseDisplayItem, BorderDisplayIte
 use gfx::display_list::{BorderRadii, BoxShadowClipMode, BoxShadowDisplayItem, ClippingRegion};
 use gfx::display_list::{DisplayItem, DisplayList, DisplayItemMetadata};
 use gfx::display_list::{GradientDisplayItem};
-use gfx::display_list::{GradientStop, ImageDisplayItem, LineDisplayItem};
+use gfx::display_list::{GradientStop, ImageDisplayItem, CanvasDisplayItem, LineDisplayItem};
 use gfx::display_list::{OpaqueNode, SolidColorDisplayItem};
 use gfx::display_list::{StackingContext, TextDisplayItem, TextOrientation};
 use gfx::paint_task::{PaintLayer, THREAD_TINT_COLORS};
@@ -1038,11 +1038,11 @@ impl FragmentDisplayListBuilding for Fragment {
                     None => repeat(0xFFu8).take(width * height * 4).collect(),
                 };
 
-                let canvas_display_item = box ImageDisplayItem {
+                let canvas_display_item = box CanvasDisplayItem {
                     base: BaseDisplayItem::new(stacking_relative_content_box,
                                                DisplayItemMetadata::new(self.node,
-                                                                            &*self.style,
-                                                                            Cursor::DefaultCursor),
+                                                                        &*self.style,
+                                                                        Cursor::DefaultCursor),
                                                (*clip).clone()),
                     image: Arc::new(png::Image {
                         width: width as u32,
@@ -1051,9 +1051,11 @@ impl FragmentDisplayListBuilding for Fragment {
                     }),
                     stretch_size: stacking_relative_content_box.size,
                     image_rendering: image_rendering::T::Auto,
+                    renderer: canvas_fragment_info.renderer.clone(),
                 };
 
-                display_list.content.push_back(DisplayItem::ImageClass(canvas_display_item));
+                display_list.renderer = canvas_fragment_info.renderer.clone();
+                display_list.content.push_back(DisplayItem::CanvasClass(canvas_display_item));
             }
             SpecificFragmentInfo::UnscannedText(_) => {
                 panic!("Shouldn't see unscanned fragments here.")
@@ -1485,6 +1487,9 @@ impl InlineFlowDisplayListBuilding for InlineFlow {
                     flow::mut_base(block_flow).display_list_building_result
                                               .add_to(&mut *display_list)
                 }
+                SpecificFragmentInfo::Canvas(ref canvas_fragment_info) => {
+                    display_list.renderer = canvas_fragment_info.renderer.clone()
+                }
                 _ => {}
             }
         }
@@ -1496,9 +1501,28 @@ impl InlineFlowDisplayListBuilding for InlineFlow {
 
         // FIXME(Savago): fix Fragment::establishes_stacking_context() for absolute positioned item
         // and remove the check for filter presence. Further details on #5812.
-        if has_stacking_context && !self.fragments.fragments[0].style().get_effects().filter.is_empty() {
+        if has_stacking_context && (!self.fragments.fragments[0].style().get_effects().filter.is_empty() ||
+                                    self.fragments.fragments[0].is_canvas_fragment()) {
+
+            let stacking_context;
+
+            if self.fragments.fragments[0].is_canvas_fragment() {
+                let scroll_policy = if self.is_fixed() {
+                    ScrollPolicy::FixedPosition
+                } else {
+                    ScrollPolicy::Scrollable
+                };
+                let transparent = color::transparent();
+                let layer_id = self.layer_id(0);
+                stacking_context = self.fragments.fragments[0].create_stacking_context(&self.base, display_list,
+                                                                 Some(Arc::new(PaintLayer::new(layer_id,
+                                                                                               transparent,
+                                                                                               scroll_policy))));
+            } else {
+                stacking_context = self.fragments.fragments[0].create_stacking_context(&self.base, display_list, None);
+            }
             self.base.display_list_building_result =
-                DisplayListBuildingResult::StackingContext(self.fragments.fragments[0].create_stacking_context(&self.base, display_list, None));
+            DisplayListBuildingResult::StackingContext(stacking_context);
         } else {
             self.base.display_list_building_result = DisplayListBuildingResult::Normal(display_list);
         }

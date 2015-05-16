@@ -268,11 +268,19 @@ pub struct CanvasFragmentInfo {
 
 impl CanvasFragmentInfo {
     pub fn new(node: &ThreadSafeLayoutNode) -> CanvasFragmentInfo {
+        let kk = node.get_renderer().clone();
+        let renderer = match node.get_renderer() {
+            Some(ref r) => {
+                let renderer = Arc::new(Mutex::new(r.clone()));
+                Some(renderer)
+            },
+            None => None,
+        };
         CanvasFragmentInfo {
             replaced_image_fragment_info: ReplacedImageFragmentInfo::new(node,
                 Some(Au::from_px(node.get_canvas_width() as i32)),
                 Some(Au::from_px(node.get_canvas_height() as i32))),
-            renderer: node.get_renderer().map(|rec| Arc::new(Mutex::new(rec))),
+            renderer: renderer,
         }
     }
 
@@ -1230,6 +1238,13 @@ impl Fragment {
         }
     }
 
+    pub fn is_canvas_fragment(&self) -> bool {
+        match self.specific {
+            SpecificFragmentInfo::Canvas(..) => true,
+            _ => false,
+        }
+    }
+
     /// Computes the intrinsic inline-sizes of this fragment.
     pub fn compute_intrinsic_inline_sizes(&mut self) -> IntrinsicISizesContribution {
         let mut result = self.style_specified_intrinsic_inline_size();
@@ -1925,6 +1940,10 @@ impl Fragment {
         }
         if self.style().get_effects().transform.is_some() {
             return true
+        }
+        match self.specific {
+            SpecificFragmentInfo::Canvas(_) => return true,
+            _ => {}
         }
         match self.style().get_box().position {
             position::T::absolute | position::T::fixed => {

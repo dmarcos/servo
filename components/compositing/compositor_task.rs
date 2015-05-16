@@ -105,6 +105,7 @@ pub struct LayerProperties {
     pub rect: Rect<f32>,
     pub background_color: Color,
     pub scroll_policy: ScrollPolicy,
+    pub renderer: bool,
 }
 
 impl LayerProperties {
@@ -119,6 +120,7 @@ impl LayerProperties {
                               metadata.position.size.height as f32)),
             background_color: metadata.background_color,
             scroll_policy: metadata.scroll_policy,
+            renderer: metadata.renderer,
         }
     }
 }

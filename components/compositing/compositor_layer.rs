@@ -48,7 +48,7 @@ pub struct CompositorData {
 impl CompositorData {
     pub fn new_layer(layer_properties: LayerProperties,
                      wants_scroll_events: WantsScrollEventsFlag,
-                     tile_size: usize)
+                     tile_size: Option<usize>)
                      -> Rc<Layer<CompositorData>> {
         let new_compositor_data = CompositorData {
             pipeline_id: layer_properties.pipeline_id,
@@ -57,6 +57,11 @@ impl CompositorData {
             scroll_policy: layer_properties.scroll_policy,
             epoch: layer_properties.epoch,
             scroll_offset: TypedPoint2D(0., 0.),
+        };
+
+        let tile_size = match tile_size {
+            Some(size) => size,
+            None => layer_properties.rect.size.width as usize,
         };
 
         Rc::new(Layer::new(Rect::from_untyped(&layer_properties.rect),

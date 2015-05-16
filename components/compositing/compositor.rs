@@ -621,11 +621,12 @@ impl<Window: WindowMethods> IOCompositor<Window> {
             rect: Rect::zero(),
             background_color: color::transparent(),
             scroll_policy: ScrollPolicy::Scrollable,
+            renderer: false,
         };
 
         let root_layer = CompositorData::new_layer(layer_properties,
                                                    WantsScrollEventsFlag::WantsScrollEvents,
-                                                   opts::get().tile_size);
+                                                   Some(opts::get().tile_size));
 
         self.get_or_create_pipeline_details(pipeline.id).pipeline = Some(pipeline.clone());
 
@@ -689,7 +690,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
             let base_layer = CompositorData::new_layer(
                 layer_properties,
                 WantsScrollEventsFlag::DoesntWantScrollEvents,
-                opts::get().tile_size);
+                Some(opts::get().tile_size));
 
             // Add the base layer to the front of the child list, so that child
             // iframe layers are painted on top of the base layer. These iframe
@@ -720,7 +721,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
 
         let new_layer = CompositorData::new_layer(layer_properties,
                                                   WantsScrollEventsFlag::DoesntWantScrollEvents,
-                                                  root_layer.tile_size);
+                                                  Some(root_layer.tile_size));
         root_layer.add_child(new_layer);
     }
 

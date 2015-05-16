@@ -16,11 +16,11 @@ git = "https://github.com/servo/rust-geom"
 [dependencies.gleam]
 git = "https://github.com/servo/gleam"
 
+[dependencies.layers]
+git = "https://github.com/servo/rust-layers"
+
 [dependencies.util]
 path = "../util"
-
-[dependencies.gfx]
-path = "../gfx"
 
 [dependencies.offscreen_gl_context]
 git = "https://github.com/ecoal95/rust-offscreen-rendering-context"

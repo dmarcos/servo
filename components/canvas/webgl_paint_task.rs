@@ -7,6 +7,7 @@ use geom::size::Size2D;
 
 use gleam::gl;
 use gleam::gl::types::{GLsizei};
+use layers::layers::LayerBuffer;
 
 use util::task::spawn_named;
 
@@ -20,6 +21,7 @@ pub struct WebGLPaintTask {
     size: Size2D<i32>,
     original_context_size: Size2D<i32>,
     gl_context: GLContext,
+    layer_buffer: Option<Box<LayerBuffer>>,
 }
 
 // This allows trying to create the PaintTask
@@ -33,7 +35,8 @@ impl WebGLPaintTask {
         Ok(WebGLPaintTask {
             size: size,
             original_context_size: size,
-            gl_context: context
+            gl_context: context,
+            layer_buffer: None
         })
     }
 
@@ -77,6 +80,8 @@ impl WebGLPaintTask {
                             CanvasCommonMsg::SendPixelContents(chan) => painter.send_pixel_contents(chan),
                             // TODO(ecoal95): handle error nicely
                             CanvasCommonMsg::Recreate(size) => painter.recreate(size).unwrap(),
+                            CanvasCommonMsg::SetLayerBuffer(layer_buffer) => painter.set_layer_buffer(layer_buffer),
+                            CanvasCommonMsg::GetLayerBuffer(chan) => painter.get_layer_buffer(chan),
                         }
                     },
                     CanvasMsg::Canvas2d(_) => panic!("Wrong message sent to WebGLTask"),
@@ -139,6 +144,10 @@ impl WebGLPaintTask {
         chan.send(attrib_location).unwrap();
     }
 
+    fn get_layer_buffer(&mut self, chan: Sender<Option<Box<LayerBuffer>>>) {
+        //chan.send(self.layer_buffer).unwrap();
+    }
+
     fn get_shader_info_log(&self, shader_id: u32, chan: Sender<String>) {
         let info = gl::get_shader_info_log(shader_id);
         chan.send(info).unwrap();
@@ -180,6 +189,10 @@ impl WebGLPaintTask {
         // rgba -> bgra
         byte_swap(&mut pixels);
         chan.send(pixels).unwrap();
+    }
+
+    fn set_layer_buffer(&mut self, layer_buffer: Option<Box<LayerBuffer>>) {
+        self.layer_buffer = layer_buffer;
     }
 
     fn shader_source(&self, shader_id: u32, source_lines: Vec<String>) {

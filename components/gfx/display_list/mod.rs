@@ -16,6 +16,7 @@
 
 #![deny(unsafe_code)]
 
+use canvas::canvas_msg::CanvasMsg;
 use display_list::optimizer::DisplayListOptimizer;
 use paint_context::{PaintContext, ToAzureRect};
 use self::DisplayItem::*;
@@ -43,7 +44,8 @@ use util::range::Range;
 use util::smallvec::SmallVec8;
 use std::fmt;
 use std::slice::Iter;
-use std::sync::Arc;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use style::computed_values::{border_style, cursor, filter, image_rendering, mix_blend_mode};
 use style::computed_values::{pointer_events};
 use style::properties::ComputedValues;
@@ -93,6 +95,8 @@ pub struct DisplayList {
     pub outlines: LinkedList<DisplayItem>,
     /// Child stacking contexts.
     pub children: LinkedList<Arc<StackingContext>>,
+    /// For the stacking context that handle painting in their own renderer
+    pub renderer: Option<Arc<Mutex<Sender<CanvasMsg>>>>,
 }
 
 impl DisplayList {
@@ -106,6 +110,7 @@ impl DisplayList {
             content: LinkedList::new(),
             outlines: LinkedList::new(),
             children: LinkedList::new(),
+            renderer: None,
         }
     }
 
@@ -179,6 +184,9 @@ impl DisplayList {
                     }
                     DisplayItem::ImageClass(ref image) => {
                         println!("{:?} Image. {:?}", indentation, image.base.bounds)
+                    }
+                    DisplayItem::CanvasClass(ref image) => {
+                        println!("{:?} Canvas. {:?}", indentation, image.base.bounds)
                     }
                     DisplayItem::BorderClass(ref border) => {
                         println!("{:?} Border. {:?}", indentation, border.base.bounds)
@@ -268,7 +276,7 @@ impl StackingContext {
             z_index: z_index,
             transform: *transform,
             filters: filters,
-            blend_mode: blend_mode,
+            blend_mode: blend_mode
         }
     }
 
@@ -578,6 +586,7 @@ pub enum DisplayItem {
     SolidColorClass(Box<SolidColorDisplayItem>),
     TextClass(Box<TextDisplayItem>),
     ImageClass(Box<ImageDisplayItem>),
+    CanvasClass(Box<CanvasDisplayItem>),
     BorderClass(Box<BorderDisplayItem>),
     GradientClass(Box<GradientDisplayItem>),
     LineClass(Box<LineDisplayItem>),
@@ -868,6 +877,32 @@ impl HeapSizeOf for ImageDisplayItem {
     }
 }
 
+/// Paints an image.
+#[derive(Clone)]
+pub struct CanvasDisplayItem {
+    pub base: BaseDisplayItem,
+    pub image: Arc<Image>,
+
+    /// The dimensions to which the image display item should be stretched. If this is smaller than
+    /// the bounds of this display item, then the image will be repeated in the appropriate
+    /// direction to tile the entire bounds.
+    pub stretch_size: Size2D<Au>,
+
+    /// The algorithm we should use to stretch the image. See `image_rendering` in CSS-IMAGES-3 §
+    /// 5.3.
+    pub image_rendering: image_rendering::T,
+
+    pub renderer: Option<Arc<Mutex<Sender<CanvasMsg>>>>,
+}
+
+
+impl HeapSizeOf for CanvasDisplayItem {
+    fn heap_size_of_children(&self) -> usize {
+        self.base.heap_size_of_children()
+        // We exclude `image` here because it is non-owning.
+    }
+}
+
 /// Paints a gradient.
 #[derive(Clone)]
 pub struct GradientDisplayItem {
@@ -1083,6 +1118,31 @@ impl DisplayItem {
                 }
             }
 
+            DisplayItem::CanvasClass(ref canvas_item) => {
+                // FIXME(pcwalton): This is a really inefficient way to draw a tiled image; use a
+                 // brush instead.
+                debug!("Drawing image at {:?}.", canvas_item.base.bounds);
+
+                let mut y_offset = Au(0);
+                while y_offset < canvas_item.base.bounds.size.height {
+                   let mut x_offset = Au(0);
+                   while x_offset < canvas_item.base.bounds.size.width {
+                       let mut bounds = canvas_item.base.bounds;
+                       bounds.origin.x = bounds.origin.x + x_offset;
+                       bounds.origin.y = bounds.origin.y + y_offset;
+                       bounds.size = canvas_item.stretch_size;
+
+                       paint_context.draw_image(&bounds,
+                                                canvas_item.image.clone(),
+                                                canvas_item.image_rendering.clone());
+
+                       x_offset = x_offset + canvas_item.stretch_size.width;
+                   }
+
+                   y_offset = y_offset + canvas_item.stretch_size.height;
+                }
+            }
+
             DisplayItem::BorderClass(ref border) => {
                 paint_context.draw_border(&border.base.bounds,
                                           &border.border_widths,
@@ -1118,6 +1178,7 @@ impl DisplayItem {
             DisplayItem::SolidColorClass(ref solid_color) => &solid_color.base,
             DisplayItem::TextClass(ref text) => &text.base,
             DisplayItem::ImageClass(ref image_item) => &image_item.base,
+            DisplayItem::CanvasClass(ref image_item) => &image_item.base,
             DisplayItem::BorderClass(ref border) => &border.base,
             DisplayItem::GradientClass(ref gradient) => &gradient.base,
             DisplayItem::LineClass(ref line) => &line.base,
@@ -1130,6 +1191,7 @@ impl DisplayItem {
             DisplayItem::SolidColorClass(ref mut solid_color) => &mut solid_color.base,
             DisplayItem::TextClass(ref mut text) => &mut text.base,
             DisplayItem::ImageClass(ref mut image_item) => &mut image_item.base,
+            DisplayItem::CanvasClass(ref mut image_item) => &mut image_item.base,
             DisplayItem::BorderClass(ref mut border) => &mut border.base,
             DisplayItem::GradientClass(ref mut gradient) => &mut gradient.base,
             DisplayItem::LineClass(ref mut line) => &mut line.base,
@@ -1157,6 +1219,7 @@ impl fmt::Debug for DisplayItem {
                 DisplayItem::SolidColorClass(_) => "SolidColor",
                 DisplayItem::TextClass(_) => "Text",
                 DisplayItem::ImageClass(_) => "Image",
+                DisplayItem::CanvasClass(_) => "Canvas",
                 DisplayItem::BorderClass(_) => "Border",
                 DisplayItem::GradientClass(_) => "Gradient",
                 DisplayItem::LineClass(_) => "Line",
@@ -1174,6 +1237,7 @@ impl HeapSizeOf for DisplayItem {
             SolidColorClass(ref item) => item.heap_size_of_children(),
             TextClass(ref item)       => item.heap_size_of_children(),
             ImageClass(ref item)      => item.heap_size_of_children(),
+            CanvasClass(ref item)      => item.heap_size_of_children(),
             BorderClass(ref item)     => item.heap_size_of_children(),
             GradientClass(ref item)   => item.heap_size_of_children(),
             LineClass(ref item)       => item.heap_size_of_children(),

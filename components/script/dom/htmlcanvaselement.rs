@@ -8,10 +8,10 @@ use dom::attr::AttrHelpers;
 use dom::bindings::codegen::Bindings::HTMLCanvasElementBinding;
 use dom::bindings::codegen::Bindings::HTMLCanvasElementBinding::HTMLCanvasElementMethods;
 use dom::bindings::codegen::InheritTypes::HTMLCanvasElementDerived;
-use dom::bindings::codegen::InheritTypes::{ElementCast, HTMLElementCast};
+use dom::bindings::codegen::InheritTypes::{ElementCast, HTMLElementCast, NodeCast};
 use dom::bindings::codegen::UnionTypes::CanvasRenderingContext2DOrWebGLRenderingContext;
 use dom::bindings::global::GlobalRef;
-use dom::bindings::js::{JS, JSRef, LayoutJS, MutNullableHeap, Rootable};
+use dom::bindings::js::{JS, JSRef, LayoutJS, MutNullableHeap, Rootable, OptionalRootable, ResultRootable, RootedReference};
 use dom::bindings::js::Temporary;
 use dom::bindings::js::Unrooted;
 use dom::bindings::utils::{Reflectable};
@@ -21,9 +21,10 @@ use dom::element::{Element, AttributeHandlers};
 use dom::eventtarget::{EventTarget, EventTargetTypeId};
 use dom::element::ElementTypeId;
 use dom::htmlelement::{HTMLElement, HTMLElementTypeId};
-use dom::node::{Node, NodeTypeId, window_from_node};
+use dom::node::{Node, NodeDamage, NodeHelpers, NodeTypeId, window_from_node};
 use dom::virtualmethods::VirtualMethods;
 use dom::webglrenderingcontext::{WebGLRenderingContext, LayoutCanvasWebGLRenderingContextHelpers};
+use dom::window::WindowHelpers;
 
 use util::str::{DOMString, parse_unsigned_integer};
 
@@ -122,6 +123,7 @@ pub trait HTMLCanvasElementHelpers {
     fn get_2d_context(self) -> Temporary<CanvasRenderingContext2D>;
     fn get_webgl_context(self) -> Temporary<WebGLRenderingContext>;
     fn is_valid(self) -> bool;
+    fn mark_as_dirty(self);
 }
 
 impl<'a> HTMLCanvasElementHelpers for JSRef<'a, HTMLCanvasElement> {
@@ -147,6 +149,11 @@ impl<'a> HTMLCanvasElementHelpers for JSRef<'a, HTMLCanvasElement> {
 
     fn is_valid(self) -> bool {
         self.height.get() != 0 && self.width.get() != 0
+    }
+
+    fn mark_as_dirty(self) {
+        let node: JSRef<Node> = NodeCast::from_ref(self);
+        node.dirty(NodeDamage::OtherNodeDamage);
     }
 }
 
@@ -176,12 +183,16 @@ impl<'a> HTMLCanvasElementMethods for JSRef<'a, HTMLCanvasElement> {
                     debug!("Trying to get a 2d context for a canvas with an already initialized WebGL context");
                     return None;
                 }
-
+                let window = window_from_node(self).root();
                 let context_2d = self.context_2d.or_init(|| {
-                    let window = window_from_node(self).root();
                     let size = self.get_size();
-                    CanvasRenderingContext2D::new(GlobalRef::Window(window.r()), self, size)
+                    let context = CanvasRenderingContext2D::new(GlobalRef::Window(window.r()), self, size);
+                    self.mark_as_dirty();
+                    // Triggers a reflow
+                    window.r().add_pending_reflow();
+                    context
                 });
+
                 Some(CanvasRenderingContext2DOrWebGLRenderingContext::eCanvasRenderingContext2D(Unrooted::from_temporary(context_2d)))
             }
             "webgl" | "experimental-webgl" => {
@@ -189,17 +200,16 @@ impl<'a> HTMLCanvasElementMethods for JSRef<'a, HTMLCanvasElement> {
                     debug!("Trying to get a WebGL context for a canvas with an already initialized 2d context");
                     return None;
                 }
-
-                if !self.context_webgl.get().is_some() {
-                    let window = window_from_node(self).root();
+                let window = window_from_node(self).root();
+                let webgl_context = self.context_webgl.or_init(|| {
                     let size = self.get_size();
-
-                    self.context_webgl.set(
-                        WebGLRenderingContext::new(GlobalRef::Window(window.r()), self, size).map(JS::from_rooted))
-                }
-
-                self.context_webgl.get().map( |ctx|
-                    CanvasRenderingContext2DOrWebGLRenderingContext::eWebGLRenderingContext(Unrooted::from_js(ctx)))
+                    let context = WebGLRenderingContext::new(GlobalRef::Window(window.r()), self, size);
+                    self.mark_as_dirty();
+                    // Triggers a reflow
+                    window.r().add_pending_reflow();
+                    context.unwrap()
+                });
+                Some(CanvasRenderingContext2DOrWebGLRenderingContext::eWebGLRenderingContext(Unrooted::from_temporary(webgl_context)))
             }
             _ => None
         }
