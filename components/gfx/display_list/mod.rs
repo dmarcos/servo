@@ -97,6 +97,8 @@ pub struct DisplayList {
     pub children: LinkedList<Arc<StackingContext>>,
     /// For the stacking context that handle painting in their own renderer
     pub renderer: Option<Arc<Mutex<Sender<CanvasMsg>>>>,
+    /// True If this display list is renderered in its own task
+    pub has_own_renderer: bool,
 }
 
 impl DisplayList {
@@ -111,6 +113,7 @@ impl DisplayList {
             outlines: LinkedList::new(),
             children: LinkedList::new(),
             renderer: None,
+            has_own_renderer: false,
         }
     }
 

@@ -13,6 +13,7 @@ use util::task::spawn_named;
 
 use std::borrow::ToOwned;
 use std::slice::bytes::copy_memory;
+use std::sync::Arc;
 use std::sync::mpsc::{channel, Sender};
 use util::vec::byte_swap;
 use offscreen_gl_context::{GLContext, GLContextAttributes};
@@ -21,7 +22,7 @@ pub struct WebGLPaintTask {
     size: Size2D<i32>,
     original_context_size: Size2D<i32>,
     gl_context: GLContext,
-    layer_buffer: Option<Box<LayerBuffer>>,
+    layer_buffer: Arc<Option<Box<LayerBuffer>>>,
 }
 
 // This allows trying to create the PaintTask
@@ -36,7 +37,7 @@ impl WebGLPaintTask {
             size: size,
             original_context_size: size,
             gl_context: context,
-            layer_buffer: None
+            layer_buffer: Arc::new(None)
         })
     }
 
@@ -145,7 +146,22 @@ impl WebGLPaintTask {
     }
 
     fn get_layer_buffer(&mut self, chan: Sender<Option<Box<LayerBuffer>>>) {
-        //chan.send(self.layer_buffer).unwrap();
+        // We mark the native surface as not leaking in case the surfaces
+        // die on their way to the compositor task.
+        let mut native_surface: NativeSurface =
+            NativeSurface::from_draw_target_backing(draw_target.steal_draw_target_backing());
+        native_surface.mark_wont_leak();
+
+        let layer_buffer = Some(box LayerBuffer {
+            native_surface: native_surface,
+            rect: tile.page_rect,
+            screen_pos: tile.screen_rect,
+            resolution: scale,
+            stride: (width * 4) as usize,
+            painted_with_cpu: true,
+            content_age: tile.content_age,
+        });
+        chan.send(layer_buffer).unwrap();
     }
 
     fn get_shader_info_log(&self, shader_id: u32, chan: Sender<String>) {
@@ -192,7 +208,7 @@ impl WebGLPaintTask {
     }
 
     fn set_layer_buffer(&mut self, layer_buffer: Option<Box<LayerBuffer>>) {
-        self.layer_buffer = layer_buffer;
+        self.layer_buffer = Arc::new(layer_buffer);
     }
 
     fn shader_source(&self, shader_id: u32, source_lines: Vec<String>) {

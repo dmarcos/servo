@@ -816,6 +816,14 @@ impl<Window: WindowMethods> IOCompositor<Window> {
                self.window_size.width.get(),
                self.window_size.height.get());
 
+        let renderer = layer.extra_data.borrow().renderer;
+
+        if renderer {
+            let layer_id = layer.extra_data.borrow().id;
+            let pipeline = self.get_pipeline(layer.get_pipeline_id());
+            pipeline.paint_chan.send_opt(PaintMsg::GetLayerBuffer(pipeline, ));
+        }
+
         // From now on, if we destroy the buffers, they will leak.
         let mut new_layer_buffer_set = new_layer_buffer_set;
         new_layer_buffer_set.mark_will_leak();

@@ -43,6 +43,9 @@ pub struct CompositorData {
     /// The scroll offset originating from this scrolling root. This allows scrolling roots
     /// to track their current scroll position even while their content_offset does not change.
     pub scroll_offset: TypedPoint2D<LayerPixel, f32>,
+
+    // This layer has its own renderer
+    pub renderer: bool,
 }
 
 impl CompositorData {
@@ -57,6 +60,7 @@ impl CompositorData {
             scroll_policy: layer_properties.scroll_policy,
             epoch: layer_properties.epoch,
             scroll_offset: TypedPoint2D(0., 0.),
+            renderer: layer_properties.renderer,
         };
 
         let tile_size = match tile_size {

@@ -9,7 +9,8 @@ use geom::point::Point2D;
 use geom::rect::Rect;
 use geom::size::Size2D;
 use layers::layers::LayerBuffer;
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
 
 pub enum CanvasMsg {
     Canvas2d(Canvas2dMsg),

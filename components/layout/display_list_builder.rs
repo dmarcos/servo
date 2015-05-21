@@ -1488,6 +1488,7 @@ impl InlineFlowDisplayListBuilding for InlineFlow {
                                               .add_to(&mut *display_list)
                 }
                 SpecificFragmentInfo::Canvas(ref canvas_fragment_info) => {
+                    display_list.has_own_renderer = true;
                     display_list.renderer = canvas_fragment_info.renderer.clone()
                 }
                 _ => {}
