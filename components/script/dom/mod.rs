@@ -181,6 +181,10 @@ pub mod types {
 }
 
 pub mod activation;
+pub mod audiocontext;
+pub mod audiodestinationnode;
+pub mod audioparam;
+pub mod audionode;
 pub mod attr;
 pub mod blob;
 pub mod browsercontext;
@@ -294,6 +298,8 @@ pub mod navigatorinfo;
 pub mod node;
 pub mod nodeiterator;
 pub mod nodelist;
+pub mod oscillatornode;
+pub mod periodicwave;
 pub mod processinginstruction;
 pub mod performance;
 pub mod performancetiming;

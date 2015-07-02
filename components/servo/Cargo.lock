@@ -222,6 +222,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cult"
+version = "0.0.3"
+source = "git+https://github.com/padenot/cult#cac1953b20d0041f9fa0514d49eb2c724c17f5c6"
+dependencies = [
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "debug-builders"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1059,6 +1067,7 @@ dependencies = [
  "canvas 0.0.1",
  "canvas_traits 0.0.1",
  "cssparser 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cult 0.0.3 (git+https://github.com/padenot/cult)",
  "devtools_traits 0.0.1",
  "encoding 0.2.32 (registry+https://github.com/rust-lang/crates.io-index)",
  "euclid 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",

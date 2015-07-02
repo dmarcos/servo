@@ -66,6 +66,7 @@ extern crate uuid;
 extern crate string_cache;
 extern crate offscreen_gl_context;
 extern crate tendril;
+extern crate cult;
 
 pub mod cors;
 pub mod document_loader;
